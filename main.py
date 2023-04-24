@@ -1,40 +1,34 @@
+from app.camera import Camera
+from app.models.people import save_attendance
+from app.helpers.face_utils import load_encodings, detect_faces, compare_faces
 import cv2
-import numpy as np
-import face_recognition
 
-# Leer las codificaciones de caras desde el archivo encodings.txt
-with open('../training/encodings.txt', 'r') as f:
-    lines = f.readlines()
-
-encodings = []
-names = []
-for line in lines:
-    encoding_str, name = line.strip().rsplit(',', 1)
-    encoding = [float(val) for val in encoding_str.split(',')]
-    encodings.append(encoding)
-    names.append(name)
-
+# Cargar las codificaciones de las caras
+encodings, names = load_encodings()
 
 # Iniciar la cámara
-video_capture = cv2.VideoCapture(0)
+camera = Camera()
 
 while True:
     # Capturar un marco de video
-    ret, frame = video_capture.read()
+    frame = camera.get_frame()
+
+    if frame is None:
+        continue
 
     # Detectar todas las caras en el marco
-    face_locations = face_recognition.face_locations(frame)
-    face_encodings = face_recognition.face_encodings(frame, face_locations)
+    face_locations, face_encodings = detect_faces(frame)
 
     for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
         # Comparar la codificación de la cara detectada con las codificaciones de la base de datos
-        matches = face_recognition.compare_faces(encodings, face_encoding)
-        distances = face_recognition.face_distance(encodings, face_encoding)
-        best_match_index = np.argmin(distances)
+        matches, best_match_index = compare_faces(encodings, face_encoding)
 
         # Si se encontró una coincidencia, mostrar el nombre de la persona en el video
         if matches[best_match_index]:
             name = names[best_match_index]
+
+            # Guardar el registro en la base de datos
+            save_attendance("13-305", "Principios de Desarrollo de software", name, "Mario")
 
             # Dibujar un rectángulo alrededor de la cara
             cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
@@ -51,7 +45,5 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-    # Liberar la cámara y cerrar todas las ventanas abiertas
-video_capture.release()
+camera.stop()
 cv2.destroyAllWindows()
-
